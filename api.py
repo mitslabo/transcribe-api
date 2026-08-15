@@ -7,10 +7,14 @@ from pathlib import Path
 
 import requests
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 app = FastAPI(title="Audio transcription service")
+
+DONE = "DONE"
+MISSING_AUDIO = "FAILED(MISSING_AUDIO)"
+TRANSCRIBE_ERROR = "FAILED(TRANSCRIBE_ERROR)"
 
 
 class TranscriptionRequest(BaseModel):
@@ -54,21 +58,24 @@ def merge_audio_files(source_files: list[Path], output_file: Path) -> None:
 
 
 def parse_whisper_response(response: requests.Response, response_format: str):
-    if response_format == "text":
-        return PlainTextResponse(response.text)
-    if response_format == "srt":
-        return PlainTextResponse(response.text, media_type="application/x-subrip")
-
     try:
         payload = response.json()
     except ValueError:
-        return {"text": response.text}
+        payload = {"text": response.text}
 
     if isinstance(payload, dict):
         return payload
     if isinstance(payload, str):
         return {"text": payload}
     return {"text": str(payload)}
+
+
+def build_result(payload: dict, status: str, merged_audio_path: Path | None) -> dict:
+    return {
+        **payload,
+        "status": status,
+        "merged_audio_path": str(merged_audio_path) if merged_audio_path else None,
+    }
 
 
 @app.post("/v1/audio/transcriptions")
@@ -81,44 +88,70 @@ async def transcriptions(
     source_files = [Path(file_path).expanduser() for file_path in request.files]
     missing_files = [str(path) for path in source_files if not path.is_file()]
     if missing_files:
-        raise HTTPException(
+        return JSONResponse(
             status_code=404,
-            detail={"message": "Audio file not found", "files": missing_files},
+            content={
+                "status": MISSING_AUDIO,
+                "merged_audio_path": None,
+                "message": "Audio file not found",
+                "files": missing_files,
+            },
         )
 
-    with tempfile.TemporaryDirectory(prefix="transcribe-") as work_dir:
-        work_path = Path(work_dir)
-        merged_file = work_path / "merged.wav"
-        try:
-            merge_audio_files(source_files, merged_file)
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=500, detail="ffmpeg is not installed") from exc
-        except subprocess.CalledProcessError as exc:
-            detail = exc.stderr.strip() or "ffmpeg failed"
-            raise HTTPException(status_code=422, detail=detail) from exc
+    merged_directory = Path(os.environ.get("MERGED_AUDIO_DIR", "./merged")).expanduser()
+    merged_directory.mkdir(parents=True, exist_ok=True)
+    merged_file_handle = tempfile.NamedTemporaryFile(
+        dir=merged_directory,
+        prefix="merged-",
+        suffix=".wav",
+        delete=False,
+    )
+    merged_file = Path(merged_file_handle.name)
+    merged_file_handle.close()
 
-        try:
-            with merged_file.open("rb") as audio_file:
-                response = requests.post(
-                    get_whisper_url(),
-                    headers={
-                        "Authorization": f"Bearer {os.environ.get('WHISPER_API_KEY', '')}"
-                    },
-                    data={
-                        "model": request.model,
-                        "temperature": str(request.temperature),
-                        "temperature_inc": str(request.temperature_inc),
-                        "response_format": request.response_format,
-                    },
-                    files={"file": ("merged.wav", audio_file, "audio/wav")},
-                    timeout=600,
-                )
-            response.raise_for_status()
-        except requests.RequestException as exc:
-            detail = response.text if exc.response is not None else str(exc)
-            raise HTTPException(status_code=502, detail=detail) from exc
+    try:
+        merge_audio_files(source_files, merged_file)
+    except FileNotFoundError as exc:
+        return JSONResponse(
+            status_code=500,
+            content=build_result(
+                {"message": "ffmpeg is not installed"}, TRANSCRIBE_ERROR, merged_file
+            ),
+        )
+    except subprocess.CalledProcessError as exc:
+        detail = exc.stderr.strip() or "ffmpeg failed"
+        return JSONResponse(
+            status_code=422,
+            content=build_result({"message": detail}, TRANSCRIBE_ERROR, merged_file),
+        )
 
-    return parse_whisper_response(response, request.response_format)
+    try:
+        with merged_file.open("rb") as audio_file:
+            response = requests.post(
+                get_whisper_url(),
+                headers={
+                    "Authorization": f"Bearer {os.environ.get('WHISPER_API_KEY', '')}"
+                },
+                data={
+                    "model": request.model,
+                    "temperature": str(request.temperature),
+                    "temperature_inc": str(request.temperature_inc),
+                    "response_format": request.response_format,
+                },
+                files={"file": ("merged.wav", audio_file, "audio/wav")},
+                timeout=600,
+            )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        detail = exc.response.text if exc.response is not None else str(exc)
+        return JSONResponse(
+            status_code=502,
+            content=build_result({"message": detail}, TRANSCRIBE_ERROR, merged_file),
+        )
+
+    return build_result(
+        parse_whisper_response(response, request.response_format), DONE, merged_file
+    )
 
 
 if __name__ == "__main__":

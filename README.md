@@ -65,7 +65,14 @@ Request body:
 | `temperature_inc` | `number`   | `0.2`       | Temperature increment forwarded to the server       |
 
 The input files are concatenated using `ffmpeg` and uploaded as `merged.wav`.
-The response is passed through from the Whisper server when possible.
+The response includes the Whisper payload together with these fields:
+
+| Field               | Description                                                               |
+| ------------------- | ------------------------------------------------------------------------- |
+| `status`            | `DONE`, `FAILED(MISSING_AUDIO)`, or `FAILED(TRANSCRIBE_ERROR)`            |
+| `merged_audio_path` | Path to the persisted merged WAV file, or `null` when no file was created |
+
+The merged WAV file is kept in `MERGED_AUDIO_DIR`.
 
 ## Configuration
 
