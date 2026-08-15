@@ -1,0 +1,7 @@
+.git
+.venv
+__pycache__
+.env
+raw
+merged
+*.pyc

@@ -1,0 +1,24 @@
+services:
+  transcribe-api:
+    build:
+      context: .
+      args:
+        - HTTP_PROXY=$HTTP_PROXY
+        - HTTPS_PROXY=$HTTPS_PROXY
+        - NO_PROXY=$NO_PROXY
+    # Configure proxy settings for the running container.
+    environment:
+      PORT: "8080"
+      WHISPER_SERVER_URL: "${WHISPER_SERVER_URL:-http://host.docker.internal:8081/v1}"
+      WHISPER_API_KEY: "${WHISPER_API_KEY:-}"
+      HTTP_PROXY: "${HTTP_PROXY:-}"
+      HTTPS_PROXY: "${HTTPS_PROXY:-}"
+      NO_PROXY: "${NO_PROXY:-}"
+    ports:
+      - "${TRANSCRIBE_PORT:-8080}:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - "${RAW_AUDIO_DIR:-./raw}:${RAW_AUDIO_DIR:-./raw}"
+      - "${MERGED_AUDIO_DIR:-./merged}:/audio/merged:ro"
+    restart: unless-stopped
