@@ -98,7 +98,7 @@ async def transcriptions(
             },
         )
 
-    merged_directory = Path("./merged").expanduser()
+    merged_directory = Path(os.environ.get("MERGED_AUDIO_DIR")).expanduser()
     merged_directory.mkdir(parents=True, exist_ok=True)
     merged_file_handle = tempfile.NamedTemporaryFile(
         dir=merged_directory,
