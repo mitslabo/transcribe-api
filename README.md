@@ -79,16 +79,17 @@ The merged WAV file is kept in `MERGED_AUDIO_DIR`.
 `compose.yml` uses the following variables. Defaults are used when variables
 are not set.
 
-| Variable             | Default                               | Description                                       |
-| -------------------- | ------------------------------------- | ------------------------------------------------- |
-| `PORT`               | `8080`                                | Port used by the API process inside the container |
-| `WHISPER_SERVER_URL` | `http://host.docker.internal:8081/v1` | Base URL of the Whisper server                    |
-| `WHISPER_API_KEY`    | Empty                                 | API key sent to the Whisper server                |
-| `TRANSCRIBE_PORT`    | `8080`                                | Host port exposed by Docker Compose               |
-| `MERGED_AUDIO_DIR`   | `./merged`                            | Host directory mounted at `/audio/merged`         |
-| `HTTP_PROXY`         | Empty                                 | HTTP proxy for the image build and container      |
-| `HTTPS_PROXY`        | Empty                                 | HTTPS proxy for the image build and container     |
-| `NO_PROXY`           | Empty                                 | Hosts that should bypass the proxy                |
+| Variable             | Default                               | Description                                         |
+| -------------------- | ------------------------------------- | --------------------------------------------------- |
+| `PORT`               | `8080`                                | Port used by the API process inside the container   |
+| `WHISPER_SERVER_URL` | `http://host.docker.internal:8081/v1` | Base URL of the Whisper server                      |
+| `WHISPER_API_KEY`    | Empty                                 | API key sent to the Whisper server                  |
+| `LOG_LEVEL`          | `INFO`                                | Application log level, such as `DEBUG` or `WARNING` |
+| `TRANSCRIBE_PORT`    | `8080`                                | Host port exposed by Docker Compose                 |
+| `MERGED_AUDIO_DIR`   | `./merged`                            | Host directory mounted at `/audio/merged`           |
+| `HTTP_PROXY`         | Empty                                 | HTTP proxy for the image build and container        |
+| `HTTPS_PROXY`        | Empty                                 | HTTPS proxy for the image build and container       |
+| `NO_PROXY`           | Empty                                 | Hosts that should bypass the proxy                  |
 
 See `.env.example` for a ready-to-copy configuration template.
 

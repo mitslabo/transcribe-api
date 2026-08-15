@@ -11,6 +11,7 @@ services:
       PORT: "8080"
       WHISPER_SERVER_URL: "${WHISPER_SERVER_URL:-http://host.docker.internal:8081/v1}"
       WHISPER_API_KEY: "${WHISPER_API_KEY:-}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
       MERGED_AUDIO_DIR: "${MERGED_AUDIO_DIR}"
       HTTP_PROXY: "${HTTP_PROXY:-}"
       HTTPS_PROXY: "${HTTPS_PROXY:-}"

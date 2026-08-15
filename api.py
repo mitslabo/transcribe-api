@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -21,7 +21,8 @@ if not logger.handlers:
         logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
     )
     logger.addHandler(handler)
-logger.setLevel(logging.INFO)
+log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
+logger.setLevel(getattr(logging, log_level, logging.INFO))
 logger.propagate = False
 
 DONE = "DONE"
@@ -70,6 +71,9 @@ def merge_audio_files(source_files: list[Path], output_file: Path) -> None:
 
 
 def parse_whisper_response(response: httpx.Response, response_format: str):
+    if response_format in {"text", "srt"}:
+        return {"text": response.text}
+
     try:
         payload = response.json()
     except (TypeError, ValueError):
@@ -93,7 +97,10 @@ def build_result(payload: dict, status: str, merged_audio_path: Path | None) -> 
 @app.post("/v1/audio/transcriptions")
 async def transcriptions(
     request: TranscriptionRequest,
+    raw_request: Request,
 ):
+    raw_body = await raw_request.body()
+    logger.info("Raw request body: %s", raw_body.decode("utf-8", errors="replace"))
     logger.info("Transcription request received: %s", request.model_dump())
 
     if request.response_format not in {"json", "text", "srt", "verbose_json"}:
