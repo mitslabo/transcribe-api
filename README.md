@@ -85,7 +85,6 @@ are not set.
 | `WHISPER_SERVER_URL` | `http://host.docker.internal:8081/v1` | Base URL of the Whisper server                    |
 | `WHISPER_API_KEY`    | Empty                                 | API key sent to the Whisper server                |
 | `TRANSCRIBE_PORT`    | `8080`                                | Host port exposed by Docker Compose               |
-| `RAW_AUDIO_DIR`      | `./raw`                               | Host directory containing source audio files      |
 | `MERGED_AUDIO_DIR`   | `./merged`                            | Host directory mounted at `/audio/merged`         |
 | `HTTP_PROXY`         | Empty                                 | HTTP proxy for the image build and container      |
 | `HTTPS_PROXY`        | Empty                                 | HTTPS proxy for the image build and container     |

@@ -11,7 +11,6 @@ services:
       PORT: "8080"
       WHISPER_SERVER_URL: "${WHISPER_SERVER_URL:-http://host.docker.internal:8081/v1}"
       WHISPER_API_KEY: "${WHISPER_API_KEY:-}"
-      RAW_AUDIO_DIR: "${RAW_AUDIO_DIR:-/app/raw}"
       MERGED_AUDIO_DIR: "${MERGED_AUDIO_DIR:-/audio/merged}"
       HTTP_PROXY: "${HTTP_PROXY:-}"
       HTTPS_PROXY: "${HTTPS_PROXY:-}"
@@ -21,6 +20,5 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - "${RAW_AUDIO_DIR:-./raw}:${RAW_AUDIO_DIR:-./raw}"
-      - "${MERGED_AUDIO_DIR:-./merged}:/audio/merged:ro"
+      - "${MERGED_AUDIO_DIR:-./merged}:/audio/merged"
     restart: unless-stopped
