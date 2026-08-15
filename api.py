@@ -1,16 +1,28 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 import subprocess
 import tempfile
 from pathlib import Path
 
-import requests
+import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 app = FastAPI(title="Audio transcription service")
+
+logger = logging.getLogger("transcribe-api")
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+    )
+    logger.addHandler(handler)
+logger.setLevel(logging.INFO)
+logger.propagate = False
 
 DONE = "DONE"
 MISSING_AUDIO = "FAILED(MISSING_AUDIO)"
@@ -57,10 +69,10 @@ def merge_audio_files(source_files: list[Path], output_file: Path) -> None:
         )
 
 
-def parse_whisper_response(response: requests.Response, response_format: str):
+def parse_whisper_response(response: httpx.Response, response_format: str):
     try:
         payload = response.json()
-    except ValueError:
+    except (TypeError, ValueError):
         payload = {"text": response.text}
 
     if isinstance(payload, dict):
@@ -82,6 +94,8 @@ def build_result(payload: dict, status: str, merged_audio_path: Path | None) -> 
 async def transcriptions(
     request: TranscriptionRequest,
 ):
+    logger.info("Transcription request received: %s", request.model_dump())
+
     if request.response_format not in {"json", "text", "srt", "verbose_json"}:
         raise HTTPException(status_code=400, detail="Unsupported response_format")
 
@@ -98,7 +112,9 @@ async def transcriptions(
             },
         )
 
-    merged_directory = Path(os.environ.get("MERGED_AUDIO_DIR")).expanduser()
+    merged_directory = Path(
+        os.environ.get("MERGED_AUDIO_DIR", "./merged")
+    ).expanduser()
     merged_directory.mkdir(parents=True, exist_ok=True)
     merged_file_handle = tempfile.NamedTemporaryFile(
         dir=merged_directory,
@@ -110,7 +126,7 @@ async def transcriptions(
     merged_file_handle.close()
 
     try:
-        merge_audio_files(source_files, merged_file)
+        await asyncio.to_thread(merge_audio_files, source_files, merged_file)
     except FileNotFoundError as exc:
         return JSONResponse(
             status_code=500,
@@ -126,8 +142,9 @@ async def transcriptions(
         )
 
     try:
-        with merged_file.open("rb") as audio_file:
-            response = requests.post(
+        audio_data = await asyncio.to_thread(merged_file.read_bytes)
+        async with httpx.AsyncClient(timeout=600) as client:
+            response = await client.post(
                 get_whisper_url(),
                 headers={
                     "Authorization": f"Bearer {os.environ.get('WHISPER_API_KEY', '')}"
@@ -138,12 +155,16 @@ async def transcriptions(
                     "temperature_inc": str(request.temperature_inc),
                     "response_format": request.response_format,
                 },
-                files={"file": ("merged.wav", audio_file, "audio/wav")},
-                timeout=600,
+                files={"file": ("merged.wav", audio_data, "audio/wav")},
             )
         response.raise_for_status()
-    except requests.RequestException as exc:
-        detail = exc.response.text if exc.response is not None else str(exc)
+        logger.info("END %s", merged_file)
+    except (httpx.HTTPError, OSError) as exc:
+        detail = (
+            exc.response.text
+            if isinstance(exc, httpx.HTTPStatusError) and exc.response is not None
+            else str(exc)
+        )
         return JSONResponse(
             status_code=502,
             content=build_result({"message": detail}, TRANSCRIBE_ERROR, merged_file),
